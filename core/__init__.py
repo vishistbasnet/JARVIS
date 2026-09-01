@@ -1,0 +1,1 @@
+"""Core package: assistant orchestration, routing, and conversation context."""

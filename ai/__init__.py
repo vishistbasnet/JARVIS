@@ -1,0 +1,1 @@
+"""AI package: LLM provider abstraction, prompts, and the tool registry."""
