@@ -1,5 +1,5 @@
 # ==========================================
-# JARVIS - Module 01 Dependencies
+# JARVIS - Module 01
 # Project Foundation
 # ==========================================
 
@@ -7,5 +7,18 @@ python-dotenv==1.0.1
 pydantic==2.9.2
 pydantic-settings==2.6.0
 
+# ==========================================
+# JARVIS - Module 02
+# Speech Recognition
+# ==========================================
+
+faster-whisper==1.0.3
+sounddevice==0.5.1
+numpy==2.0.2
+requests==2.32.5
+
+# ==========================================
 # Testing
+# ==========================================
+
 pytest==8.3.3
