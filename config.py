@@ -43,18 +43,16 @@ class Settings(BaseSettings):
 
     # --- LLM provider -----------------------------------------------------
     llm_provider: str = Field(
-        default="anthropic",
-        description="Which LLM backend to use. Currently only 'anthropic' "
-        "is implemented; the LLMProvider interface (ai/llm.py) allows "
-        "adding others later without changing the rest of the app.",
+        default="gemini",
+        description="LLM provider used by JARVIS.",
     )
     llm_api_key: str = Field(
         default="",
         description="API key for the configured LLM provider.",
     )
     llm_model: str = Field(
-        default="claude-sonnet-4-6",
-        description="Model name to use for LLM calls.",
+        default="gemini-3.5-flash-lite",
+        description="Model used for JARVIS conversations.",
     )
 
     # --- Speech -------------------------------------------------------------
