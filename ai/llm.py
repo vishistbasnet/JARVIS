@@ -1,13 +1,3 @@
-"""
-LLM abstraction for JARVIS.
-
-The rest of the application interacts with the LLMProvider interface
-instead of directly depending on a specific vendor SDK.
-
-Current implementation:
-    GeminiProvider -> Google Gemini API
-"""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -16,7 +6,7 @@ from google import genai
 
 from ai.prompts import JARVIS_SYSTEM_PROMPT
 from config import settings
-
+from core.context import Message
 from utils.logger import get_logger
 
 
@@ -24,25 +14,19 @@ logger = get_logger(__name__)
 
 
 class LLMProvider(ABC):
-    """
-    Abstract interface for an LLM provider.
-
-    Any future provider (Claude, OpenAI, local LLM, etc.) should
-    implement this interface.
-    """
+    """Base interface for LLM providers."""
 
     @abstractmethod
-    def chat(self, message: str) -> str:
-        """
-        Send a message to the LLM and return its text response.
-        """
+    def chat(
+        self,
+        message: str,
+        history: list[Message] | None = None,
+    ) -> str:
         raise NotImplementedError
 
 
 class GeminiProvider(LLMProvider):
-    """
-    Google Gemini implementation of the LLMProvider interface.
-    """
+    """Gemini implementation of the LLM provider."""
 
     def __init__(self) -> None:
         settings.require_llm_key()
@@ -58,29 +42,53 @@ class GeminiProvider(LLMProvider):
             self.model,
         )
 
-    def chat(self, message: str) -> str:
-        """
-        Send a single user message to Gemini.
-
-        Args:
-            message: User's text input.
-
-        Returns:
-            Gemini's response as plain text.
-
-        Raises:
-            RuntimeError: If the Gemini API request fails.
-        """
+    def chat(
+        self,
+        message: str,
+        history: list[Message] | None = None,
+    ) -> str:
 
         if not message.strip():
             raise ValueError("Message cannot be empty.")
 
         logger.info("Sending message to Gemini")
 
+        contents = []
+
+        # Add previous conversation history.
+        if history:
+            for item in history:
+                contents.append(
+                    {
+                        "role": (
+                            "user"
+                            if item.role == "user"
+                            else "model"
+                        ),
+                        "parts": [
+                            {
+                                "text": item.content
+                            }
+                        ],
+                    }
+                )
+
+        # Add current user message.
+        contents.append(
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": message.strip()
+                    }
+                ],
+            }
+        )
+
         try:
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=message,
+                contents=contents,
                 config={
                     "system_instruction": JARVIS_SYSTEM_PROMPT,
                 },
@@ -96,7 +104,9 @@ class GeminiProvider(LLMProvider):
             return response.text.strip()
 
         except Exception as exc:
-            logger.exception("Gemini API request failed.")
+            logger.exception(
+                "Gemini API request failed."
+            )
 
             raise RuntimeError(
                 f"Gemini API request failed: {exc}"
@@ -104,12 +114,7 @@ class GeminiProvider(LLMProvider):
 
 
 def create_llm_provider() -> LLMProvider:
-    """
-    Create the configured LLM provider.
-
-    Keeping provider creation here means the rest of JARVIS
-    doesn't need to know which vendor is being used.
-    """
+    """Create the configured LLM provider."""
 
     provider = settings.llm_provider.lower().strip()
 

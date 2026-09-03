@@ -1,17 +1,7 @@
-"""
-Core orchestration layer for JARVIS.
-
-The Assistant coordinates the three major components:
-
-    SpeechListener -> LLMProvider -> SpeechSpeaker
-
-It does not contain implementation details for speech recognition,
-LLM communication, or text-to-speech.
-"""
-
 from __future__ import annotations
 
 from ai.llm import create_llm_provider
+from core.context import ContextManager
 from speech.listener import SpeechListener
 from speech.speaker import SpeechSpeaker
 from utils.logger import get_logger
@@ -21,14 +11,7 @@ logger = get_logger(__name__)
 
 
 class Assistant:
-    """
-    Orchestrates the JARVIS voice-assistant pipeline.
-
-    Responsibilities:
-        1. Listen to the user.
-        2. Send recognized text to the LLM.
-        3. Speak the LLM response.
-    """
+    """Main JARVIS voice assistant."""
 
     def __init__(self) -> None:
         logger.info("Initializing JARVIS assistant...")
@@ -37,65 +20,82 @@ class Assistant:
         self.llm = create_llm_provider()
         self.speaker = SpeechSpeaker()
 
-        logger.info("JARVIS assistant initialized successfully.")
+        # Short-term conversation memory.
+        self.context = ContextManager(
+            max_messages=10
+        )
 
-    def process_once(self, duration: float = 5.0) -> str:
-        """
-        Process one complete voice interaction.
+        logger.info(
+            "JARVIS assistant initialized successfully."
+        )
 
-        Pipeline:
+    def process_once(
+        self,
+        duration: float = 5.0,
+    ) -> str:
 
-            Microphone
-                ↓
-            Speech-to-Text
-                ↓
-            Gemini
-                ↓
-            Text-to-Speech
-                ↓
-            Speaker
+        logger.info(
+            "Waiting for user speech..."
+        )
 
-        Args:
-            duration: Maximum recording duration in seconds.
-
-        Returns:
-            JARVIS's textual response.
-        """
-
-        # ----------------------------------------------------------
-        # 1. LISTEN
-        # ----------------------------------------------------------
-
-        logger.info("Waiting for user speech...")
-
-        result = self.listener.listen(duration=duration)
+        result = self.listener.listen(
+            duration=duration
+        )
 
         user_text = result.text.strip()
 
         if not user_text:
-            logger.warning("No speech was recognized.")
+            logger.warning(
+                "No speech was recognized."
+            )
+
             return ""
 
-        logger.info("User said: %s", user_text)
+        logger.info(
+            "User said: %s",
+            user_text,
+        )
 
-        # ----------------------------------------------------------
-        # 2. THINK
-        # ----------------------------------------------------------
+        # Save user message.
+        self.context.add_user_message(
+            user_text
+        )
 
-        logger.info("Sending user message to LLM...")
+        # Get complete conversation history.
+        history = self.context.get_messages()
 
-        response = self.llm.chat(user_text)
+        logger.info(
+            "Conversation context contains %d messages.",
+            len(history),
+        )
 
-        logger.info("LLM response received.")
+        logger.info(
+            "Sending user message to LLM..."
+        )
 
-        # ----------------------------------------------------------
-        # 3. SPEAK
-        # ----------------------------------------------------------
+        # Send current message + conversation history.
+        response = self.llm.chat(
+            user_text,
+            history=history[:-1],
+        )
 
-        logger.info("Speaking JARVIS response...")
+        logger.info(
+            "LLM response received."
+        )
+
+        # Save JARVIS response.
+        self.context.add_assistant_message(
+            response
+        )
+
+        logger.info(
+            "Speaking JARVIS response..."
+        )
 
         self.speaker.speak(response)
 
-        logger.info("Voice interaction completed.")
+        logger.info(
+            "Voice interaction completed."
+        )
 
         return response
