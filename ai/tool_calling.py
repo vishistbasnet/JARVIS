@@ -9,9 +9,11 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from ai.calculator import CalculatorTool
-from ai.tool_registry import ToolRegistry
+from ai.register_tools import register_default_tools
+from core.router import ToolRouter
+
 from ai.prompts import JARVIS_SYSTEM_PROMPT
+from ai.tool_registry import ToolRegistry
 from config import settings
 from utils.logger import get_logger
 
@@ -31,11 +33,17 @@ class GeminiToolCaller:
 
         self.model = settings.llm_model
 
-        self.registry = ToolRegistry()
+        # --------------------------------------------------
+        # Tool registry
+        # --------------------------------------------------
 
-        self.registry.register(
-            CalculatorTool()
-        )
+        self.registry = ToolRegistry()
+        register_default_tools(self.registry)
+        self.router = ToolRouter(self.registry)
+
+        # --------------------------------------------------
+        # Calculator declaration
+        # --------------------------------------------------
 
         self.calculator_declaration = (
             types.FunctionDeclaration(
@@ -62,15 +70,75 @@ class GeminiToolCaller:
             )
         )
 
+        # --------------------------------------------------
+        # Web search declaration
+        # --------------------------------------------------
+
+        self.web_search_declaration = (
+            types.FunctionDeclaration(
+                name="web_search",
+                description=(
+                    "Search the internet for current or "
+                    "up-to-date information. Use this tool "
+                    "when the user asks about recent events, "
+                    "latest news, current information, "
+                    "or information that may have changed "
+                    "over time."
+                ),
+                parameters_json_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "The search query to send "
+                                "to the internet."
+                            ),
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": (
+                                "Maximum number of search "
+                                "results to return."
+                            ),
+                            "minimum": 1,
+                            "maximum": 10,
+                        },
+                    },
+                    "required": ["query"],
+                },
+            )
+        )
+
+        # --------------------------------------------------
+        # Gemini tools
+        # --------------------------------------------------
+
         self.calculator_tool = types.Tool(
             function_declarations=[
                 self.calculator_declaration
             ]
         )
 
+        self.web_search_tool = types.Tool(
+            function_declarations=[
+                self.web_search_declaration
+            ]
+        )
+
+        self.gemini_tools = [
+            self.calculator_tool,
+            self.web_search_tool,
+        ]
+
         logger.info(
             "Gemini tool caller initialized with model: %s",
             self.model,
+        )
+
+        logger.info(
+            "Registered Gemini tools: %s",
+            self.registry.list_tools(),
         )
 
     def request_tool_call(
@@ -104,10 +172,15 @@ class GeminiToolCaller:
                     "the user asks you to perform arithmetic. "
                     "Do not calculate arithmetic yourself "
                     "when the calculator tool is available."
+                    + "\n\n"
+                    + "Use the web_search tool whenever "
+                    "the user asks for current, recent, "
+                    "latest, live, or time-sensitive "
+                    "information. Do not rely on your "
+                    "internal knowledge when the answer "
+                    "may have changed over time."
                 ),
-                tools=[
-                    self.calculator_tool
-                ],
+                tools=self.gemini_tools,
             ),
         )
 
@@ -156,13 +229,7 @@ class GeminiToolCaller:
             function_call.name,
         )
 
-        tool = self.registry.get(
-            function_call.name
-        )
-
-        result = tool.execute(
-            **arguments
-        )
+        result = self.router.execute(function_call.name, arguments)
 
         logger.info(
             "Tool call completed: %s",
@@ -217,9 +284,9 @@ class GeminiToolCaller:
                 ],
             ),
 
-            # IMPORTANT:
-            # Keep Gemini's original model response unchanged.
-            # This preserves the Gemini 3 thought signature.
+            # Keep Gemini's original model response
+            # unchanged. This preserves the Gemini 3
+            # thought signature.
             model_content,
 
             # Function responses use role="user"

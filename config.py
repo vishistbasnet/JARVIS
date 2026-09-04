@@ -54,7 +54,11 @@ class Settings(BaseSettings):
         default="gemini-3.5-flash-lite",
         description="Model used for JARVIS conversations.",
     )
-
+    # --- Web search --------------------------------------------------------
+    tavily_api_key: str = Field(
+        default="",
+        description="API key for Tavily web search.",
+    )
     # --- Speech -------------------------------------------------------------
     stt_model_size: str = Field(
         default="base",
