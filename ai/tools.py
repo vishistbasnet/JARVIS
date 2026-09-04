@@ -1,14 +1,26 @@
 """
-Will define the Tool interface (name, description, parameter schema,
-execute()) and a registry the LLM's function-calling can select from.
+Tool system for JARVIS.
 
-This is the abstraction that replaces "hundreds of if/elif statements"
-with a structured, extensible tool system.
-
-Not implemented yet — this arrives in Phase 3 (V1), after basic
-conversation (Phase 1-2) is stable.
+Tools are small, reusable actions that JARVIS can execute.
 """
 
 from __future__ import annotations
 
-# Implementation begins in Phase 3.
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class Tool(ABC):
+    """Base interface for every JARVIS tool."""
+
+    name: str
+    description: str
+
+    @abstractmethod
+    def execute(self, **kwargs: Any) -> Any:
+        """
+        Execute the tool.
+
+        Each concrete tool defines its own arguments and behavior.
+        """
+        raise NotImplementedError

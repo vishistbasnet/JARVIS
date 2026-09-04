@@ -1,6 +1,11 @@
+"""
+LLM providers for JARVIS.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from google import genai
 
@@ -55,7 +60,6 @@ class GeminiProvider(LLMProvider):
 
         contents = []
 
-        # Add previous conversation history.
         if history:
             for item in history:
                 contents.append(
@@ -73,7 +77,6 @@ class GeminiProvider(LLMProvider):
                     }
                 )
 
-        # Add current user message.
         contents.append(
             {
                 "role": "user",
