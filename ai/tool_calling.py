@@ -109,7 +109,136 @@ class GeminiToolCaller:
                 },
             )
         )
+        # --------------------------------------------------
+        # Application launcher declaration
+        # --------------------------------------------------
 
+        self.app_launcher_declaration = (
+            types.FunctionDeclaration(
+                name="app_launcher",
+                description=(
+                    "Open a supported Windows application. "
+                    "Use this when the user asks to open, "
+                    "launch, or start an application."
+                ),
+                parameters_json_schema={
+                    "type": "object",
+                    "properties": {
+                        "application": {
+                            "type": "string",
+                            "description": (
+                                "The application to open, "
+                                "such as Notepad, Calculator, "
+                                "File Explorer, Command Prompt, "
+                                "or PowerShell."
+                            ),
+                        }
+                    },
+                    "required": ["application"],
+                },
+            )
+        )
+
+        # --------------------------------------------------
+        # Website launcher declaration
+        # --------------------------------------------------
+
+        self.website_launcher_declaration = (
+            types.FunctionDeclaration(
+                name="website_launcher",
+                description=(
+                    "Open a supported website in the default "
+                    "browser. Use this when the user asks "
+                    "to open a website or web service."
+                ),
+                parameters_json_schema={
+                    "type": "object",
+                    "properties": {
+                        "website": {
+                            "type": "string",
+                            "description": (
+                                "The website to open, such as "
+                                "Google, YouTube, GitHub, "
+                                "LinkedIn, or Gmail."
+                            ),
+                        }
+                    },
+                    "required": ["website"],
+                },
+            )
+        )
+
+        # --------------------------------------------------
+        # File and folder launcher declaration
+        # --------------------------------------------------
+
+        self.file_launcher_declaration = (
+            types.FunctionDeclaration(
+                name="file_launcher",
+                description=(
+                    "Open a file or folder on the Windows "
+                    "computer. Use this when the user asks "
+                    "to open Downloads, Documents, Desktop, "
+                    "Pictures, Music, Videos, or a known path."
+                ),
+                parameters_json_schema={
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": (
+                                "The file, folder, or known "
+                                "folder name to open."
+                            ),
+                        }
+                    },
+                    "required": ["path"],
+                },
+            )
+        )
+
+        # --------------------------------------------------
+        # System control declaration
+        # --------------------------------------------------
+
+        self.system_control_declaration = (
+            types.FunctionDeclaration(
+                name="system_control",
+                description=(
+                    "Perform a Windows system action such as "
+                    "locking or putting the computer to sleep. "
+                    "Shutdown and restart require explicit "
+                    "confirmation."
+                ),
+                parameters_json_schema={
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": (
+                                "System action: lock, sleep, "
+                                "shutdown, or restart."
+                            ),
+                            "enum": [
+                                "lock",
+                                "sleep",
+                                "shutdown",
+                                "restart",
+                            ],
+                        },
+                        "confirm": {
+                            "type": "boolean",
+                            "description": (
+                                "Must be true to authorize "
+                                "shutdown or restart. "
+                                "Normally leave false."
+                            ),
+                        },
+                    },
+                    "required": ["action"],
+                },
+            )
+        )
         # --------------------------------------------------
         # Gemini tools
         # --------------------------------------------------
@@ -126,9 +255,37 @@ class GeminiToolCaller:
             ]
         )
 
+        self.app_launcher_tool = types.Tool(
+            function_declarations=[
+                self.app_launcher_declaration
+            ]
+        )
+
+        self.website_launcher_tool = types.Tool(
+            function_declarations=[
+                self.website_launcher_declaration
+            ]
+        )
+
+        self.file_launcher_tool = types.Tool(
+            function_declarations=[
+                self.file_launcher_declaration
+            ]
+        )
+
+        self.system_control_tool = types.Tool(
+            function_declarations=[
+                self.system_control_declaration
+            ]
+        )
+
         self.gemini_tools = [
             self.calculator_tool,
             self.web_search_tool,
+            self.app_launcher_tool,
+            self.website_launcher_tool,
+            self.file_launcher_tool,
+            self.system_control_tool,
         ]
 
         logger.info(
@@ -179,6 +336,24 @@ class GeminiToolCaller:
                     "information. Do not rely on your "
                     "internal knowledge when the answer "
                     "may have changed over time."
+                    + "\n\n"
+                    + "Use the app_launcher tool when the "
+                    "user asks to open or launch a supported "
+                    "Windows application."
+                    + "\n\n"
+                    + "Use the website_launcher tool when "
+                    "the user asks to open a supported website "
+                    "or web service."
+                    + "\n\n"
+                    + "Use the file_launcher tool when the "
+                    "user asks to open a file, folder, or known "
+                    "Windows user folder."
+                    + "\n\n"
+                    + "Use the system_control tool for Windows "
+                    "system actions such as locking or sleeping "
+                    "the computer. Never set confirm=true for "
+                    "shutdown or restart unless the user has "
+                    "explicitly confirmed that action."
                 ),
                 tools=self.gemini_tools,
             ),

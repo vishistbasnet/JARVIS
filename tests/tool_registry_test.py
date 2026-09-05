@@ -1,6 +1,4 @@
-"""
-Tests for the JARVIS tool registry.
-"""
+import pytest
 
 from ai.tool_registry import ToolRegistry
 from ai.tools import Tool
@@ -26,73 +24,50 @@ class CalculatorTestTool(Tool):
         return 42
 
 
-def main() -> None:
-    print("=" * 60)
-    print("         JARVIS TOOL REGISTRY TEST")
-    print("=" * 60)
-
+@pytest.fixture
+def registry():
     registry = ToolRegistry()
 
-    tool_1 = TestTool()
-    tool_2 = CalculatorTestTool()
+    registry.register(TestTool())
+    registry.register(CalculatorTestTool())
 
-    print("\nRegistering tools...")
+    return registry
 
-    registry.register(tool_1)
-    registry.register(tool_2)
 
-    print("✅ Tools registered.")
-
-    print("\nAvailable tools:")
-
-    for name in registry.list_tools():
-        print(f"- {name}")
-
+def test_registered_tools_are_available(registry):
     assert registry.has("test_tool")
     assert registry.has("calculator")
 
-    print("\nTesting tool retrieval...")
 
-    retrieved = registry.get("test_tool")
+def test_list_tools(registry):
+    assert registry.list_tools() == [
+        "test_tool",
+        "calculator",
+    ]
 
-    assert retrieved.name == "test_tool"
-    assert retrieved.execute() == "Tool executed successfully."
 
-    print("✅ Tool retrieval working.")
+def test_get_tool(registry):
+    tool = registry.get("test_tool")
 
-    print("\nTesting calculator tool...")
+    assert tool.name == "test_tool"
+    assert tool.execute() == "Tool executed successfully."
 
+
+def test_get_calculator_tool(registry):
     calculator = registry.get("calculator")
 
     assert calculator.execute() == 42
 
-    print("✅ Calculator tool retrieval working.")
 
-    print("\nTesting duplicate registration...")
+def test_duplicate_registration_is_rejected(registry):
+    with pytest.raises(ValueError, match="Tool already registered"):
+        registry.register(TestTool())
 
-    try:
-        registry.register(tool_1)
-        raise AssertionError(
-            "Duplicate registration should have failed."
-        )
-    except ValueError:
-        print("✅ Duplicate registration correctly rejected.")
 
-    print("\nTesting missing tool...")
-
-    try:
+def test_missing_tool_is_rejected(registry):
+    with pytest.raises(KeyError, match="Tool not found"):
         registry.get("unknown_tool")
-        raise AssertionError(
-            "Missing tool should have raised KeyError."
-        )
-    except KeyError:
-        print("✅ Missing tool correctly rejected.")
-
-    print("\n" + "=" * 60)
-    print("✅ TOOL REGISTRY TEST PASSED")
-    print("=" * 60)
 
 
-if __name__ == "__main__":
-    main()
-    
+def test_registry_has_returns_false_for_missing_tool(registry):
+    assert registry.has("unknown_tool") is False

@@ -1,50 +1,74 @@
-"""
-Test for the JARVIS web search tool.
-"""
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from ai.web_search_tool import WebSearchTool
 
 
-def main() -> None:
-    print("=" * 50)
-    print("JARVIS WEB SEARCH TOOL TEST")
-    print("=" * 50)
+def test_web_search_tool_returns_formatted_results():
+    fake_results = [
+        SimpleNamespace(
+            title="Python News",
+            url="https://example.com/python",
+            content="Latest Python programming news.",
+        ),
+        SimpleNamespace(
+            title="Python 2026",
+            url="https://example.com/python-2026",
+            content="Python developments in 2026.",
+        ),
+    ]
 
     tool = WebSearchTool()
 
-    print(f"\nTool name: {tool.name}")
-    print(f"Description: {tool.description}")
+    with patch.object(
+        tool.provider,
+        "search",
+        return_value=fake_results,
+    ) as mock_search:
 
-    query = "latest Python programming language news"
+        results = tool.execute(
+            query="latest Python programming language news",
+            max_results=3,
+        )
 
-    print(f"\nQuery: {query}")
-    print("\nExecuting web_search tool...")
+    assert isinstance(results, list)
+    assert len(results) == 2
 
-    results = tool.execute(
-        query=query,
+    assert results[0] == {
+        "title": "Python News",
+        "url": "https://example.com/python",
+        "content": "Latest Python programming news.",
+    }
+
+    assert results[1] == {
+        "title": "Python 2026",
+        "url": "https://example.com/python-2026",
+        "content": "Python developments in 2026.",
+    }
+
+    mock_search.assert_called_once_with(
+        query="latest Python programming language news",
         max_results=3,
     )
 
-    print(f"\nResults returned: {len(results)}")
 
-    for index, result in enumerate(results, start=1):
-        print(f"\n--- Result {index} ---")
-        print(f"Title: {result['title']}")
-        print(f"URL: {result['url']}")
-        print(f"Content: {result['content'][:200]}...")
+def test_web_search_tool_handles_empty_results():
+    tool = WebSearchTool()
 
-    assert isinstance(results, list)
-    assert len(results) > 0
+    with patch.object(
+        tool.provider,
+        "search",
+        return_value=[],
+    ) as mock_search:
 
-    for result in results:
-        assert "title" in result
-        assert "url" in result
-        assert "content" in result
+        results = tool.execute(
+            query="some query",
+            max_results=3,
+        )
 
-    print("\n" + "=" * 50)
-    print("WEB SEARCH TOOL TEST PASSED")
-    print("=" * 50)
+    assert results == []
 
-
-if __name__ == "__main__":
-    main()
+    mock_search.assert_called_once_with(
+        query="some query",
+        max_results=3,
+    )

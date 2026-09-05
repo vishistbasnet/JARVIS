@@ -1,6 +1,4 @@
-"""
-Tests for the JARVIS tool router.
-"""
+import pytest
 
 from ai.tool_registry import ToolRegistry
 from ai.tools import Tool
@@ -27,40 +25,26 @@ class CalculatorTestTool(Tool):
         return a + b
 
 
-def main() -> None:
-    print("=" * 60)
-    print("             JARVIS ROUTER TEST")
-    print("=" * 60)
-
-    # Create registry.
+@pytest.fixture
+def router():
     registry = ToolRegistry()
 
-    # Register tools.
     registry.register(TestTool())
     registry.register(CalculatorTestTool())
 
-    print("\nRegistered tools:")
-    for name in registry.list_tools():
-        print(f"- {name}")
+    return ToolRouter(registry)
 
-    # Create router.
-    router = ToolRouter(registry)
 
-    print("\nTesting basic tool routing...")
-
+def test_basic_tool_routing(router):
     result = router.execute(
         "test_tool",
         {"message": "Hello JARVIS"},
     )
 
-    print(f"Result: {result}")
-
     assert result == "Executed: Hello JARVIS"
 
-    print("✅ Basic routing working.")
 
-    print("\nTesting calculator routing...")
-
+def test_router_passes_arguments(router):
     result = router.execute(
         "calculator",
         {
@@ -69,40 +53,14 @@ def main() -> None:
         },
     )
 
-    print(f"Result: {result}")
-
     assert result == 42
 
-    print("✅ Argument passing working.")
 
-    print("\nTesting unknown tool...")
-
-    try:
+def test_unknown_tool_is_rejected(router):
+    with pytest.raises(KeyError, match="Tool not found"):
         router.execute("unknown_tool")
 
-        raise AssertionError(
-            "Unknown tool should have failed."
-        )
 
-    except KeyError:
-        print("✅ Unknown tool correctly rejected.")
-
-    print("\nTesting empty tool name...")
-
-    try:
+def test_empty_tool_name_is_rejected(router):
+    with pytest.raises(ValueError, match="Tool name cannot be empty"):
         router.execute("")
-
-        raise AssertionError(
-            "Empty tool name should have failed."
-        )
-
-    except ValueError:
-        print("✅ Empty tool name correctly rejected.")
-
-    print("\n" + "=" * 60)
-    print("✅ ROUTER TEST PASSED")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()
