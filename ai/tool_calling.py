@@ -226,14 +226,6 @@ class GeminiToolCaller:
                                 "restart",
                             ],
                         },
-                        "confirm": {
-                            "type": "boolean",
-                            "description": (
-                                "Must be true to authorize "
-                                "shutdown or restart. "
-                                "Normally leave false."
-                            ),
-                        },
                     },
                     "required": ["action"],
                 },
@@ -399,12 +391,31 @@ class GeminiToolCaller:
             function_call.args or {}
         )
 
+        # Gemini must NEVER be allowed to authorize
+        # dangerous system actions.
+        if function_call.name == "system_control":
+            action = str(
+                arguments.get("action", "")
+            ).strip().lower()
+
+            if action in {"shutdown", "restart"}:
+                arguments["confirm"] = False
+
+                logger.warning(
+                    "Forced confirmation=False for dangerous "
+                    "system action: %s",
+                    action,
+                )
+
         logger.info(
             "Executing Gemini tool call: %s",
             function_call.name,
         )
 
-        result = self.router.execute(function_call.name, arguments)
+        result = self.router.execute(
+            function_call.name,
+            arguments,
+        )
 
         logger.info(
             "Tool call completed: %s",
