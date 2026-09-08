@@ -7,6 +7,9 @@ from __future__ import annotations
 from typing import Any
 
 from google import genai
+
+from ai.llm import _generate_with_retry
+
 from google.genai import types
 
 from ai.register_tools import register_default_tools
@@ -310,7 +313,8 @@ class GeminiToolCaller:
             "Asking Gemini to determine tool usage."
         )
 
-        response = self.client.models.generate_content(
+        response = _generate_with_retry(
+            client=self.client,
             model=self.model,
             contents=message.strip(),
             config=types.GenerateContentConfig(
@@ -342,10 +346,11 @@ class GeminiToolCaller:
                     "Windows user folder."
                     + "\n\n"
                     + "Use the system_control tool for Windows "
-                    "system actions such as locking or sleeping "
-                    "the computer. Never set confirm=true for "
-                    "shutdown or restart unless the user has "
-                    "explicitly confirmed that action."
+                    "system actions such as locking, sleeping, "
+                    "shutting down, or restarting. Shutdown and "
+                    "restart always require explicit confirmation "
+                    "from the user. Never treat the user's initial "
+                    "request as confirmation."
                 ),
                 tools=self.gemini_tools,
             ),
@@ -485,7 +490,8 @@ class GeminiToolCaller:
             ),
         ]
 
-        final_response = self.client.models.generate_content(
+        final_response = _generate_with_retry(
+            client=self.client,
             model=self.model,
             contents=contents,
             config=types.GenerateContentConfig(

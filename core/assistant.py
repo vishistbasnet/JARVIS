@@ -11,6 +11,7 @@ from ai.llm import create_llm_provider
 from ai.tool_calling import GeminiToolCaller
 from core.confirmation import ConfirmationManager
 from core.context import ContextManager
+from core.errors import LLMError, SpeechError
 from speech.listener import SpeechListener
 from speech.speaker import SpeechSpeaker
 from utils.logger import get_logger
@@ -33,12 +34,42 @@ class Assistant:
 
         logger.info("JARVIS assistant initialized successfully.")
 
+    def _speak_safely(self, response: str) -> None:
+        """
+        Speak a response without allowing TTS failure to
+        terminate the assistant.
+        """
+
+        try:
+            self.speaker.speak(response)
+
+        except Exception as exc:
+            logger.exception(
+                "Text-to-speech failed. Continuing without audio."
+            )
+
+            print()
+            print("JARVIS:", response)
+            print(
+                f"[TTS unavailable: {exc}]"
+            )
+
     def process_once(self, duration: float = 5.0) -> str:
         """Process one complete voice interaction."""
 
         logger.info("Waiting for user speech...")
 
-        result = self.listener.listen(duration=duration)
+        try:
+            result = self.listener.listen(duration=duration)
+
+        except SpeechError as exc:
+            logger.exception(
+                "Speech input failed. Continuing without processing."
+            )
+
+            print(f"[Speech unavailable: {exc}]")
+
+            return ""
 
         user_text = result.text.strip()
 
@@ -80,13 +111,21 @@ class Assistant:
                     function_call=function_call,
                     duration=duration,
                 )
+            try:
+                response = self.tool_caller.generate_final_response(
+                    message=user_text,
+                    response=gemini_response,
+                    tool_result=tool_result,
+                )
+            except LLMError:
+                logger.exception(
+                    "Gemini final response failed after tool execution. "
+                    "Using local fallback response."
+                )
 
-            response = self.tool_caller.generate_final_response(
-                message=user_text,
-                response=gemini_response,
-                tool_result=tool_result,
-            )
-
+                response = self._build_tool_fallback(
+                    tool_result=tool_result,
+                )
         else:
             logger.info(
                 "No tool required. Using normal LLM response."
@@ -101,11 +140,45 @@ class Assistant:
 
         logger.info("Speaking JARVIS response...")
 
-        self.speaker.speak(response)
+        self._speak_safely(response)
 
         logger.info("Voice interaction completed.")
 
         return response
+
+    def _build_tool_fallback(
+        self,
+        tool_result,
+    ) -> str:
+        """
+        Build a safe local response when Gemini cannot generate
+        the final response after a tool has already executed.
+
+        The response is based only on the actual tool result.
+        """
+
+        status = tool_result.get("status")
+
+        if status == "success":
+            message = tool_result.get("message")
+
+            if message:
+                return str(message)
+
+            return "The requested action was completed successfully."
+
+        if status == "error":
+            message = tool_result.get("message")
+
+            if message:
+                return f"I couldn't complete the request. {message}"
+
+            return "I couldn't complete the requested action."
+
+        return (
+            "The tool completed with an unexpected result, "
+            "and I couldn't generate a final response."
+        )
 
     def _handle_confirmation(
         self,
@@ -134,7 +207,7 @@ class Assistant:
             self.confirmation.request_confirmation(action)
         )
 
-        self.speaker.speak(confirmation_message)
+        self._speak_safely(confirmation_message)
 
         logger.info(
             "Waiting for confirmation response..."
@@ -170,7 +243,7 @@ class Assistant:
             )
 
             self.context.add_assistant_message(response)
-            self.speaker.speak(response)
+            self._speak_safely(response)
 
             return response
 
@@ -178,7 +251,7 @@ class Assistant:
             response = confirmation_result["message"]
 
             self.context.add_assistant_message(response)
-            self.speaker.speak(response)
+            self._speak_safely(response)
 
             return response
 
@@ -233,7 +306,7 @@ class Assistant:
             )
 
             self.context.add_assistant_message(response)
-            self.speaker.speak(response)
+            self._speak_safely(response)
 
             return response
 
@@ -244,6 +317,6 @@ class Assistant:
 
         self.context.add_assistant_message(response)
 
-        self.speaker.speak(response)
+        self._speak_safely(response)
 
         return response

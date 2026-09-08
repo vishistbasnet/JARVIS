@@ -17,8 +17,8 @@ import sounddevice as sd
 from faster_whisper import WhisperModel
 
 from config import settings
+from core.errors import SpeechError
 from utils.logger import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -95,7 +95,7 @@ class SpeechListener:
 
         except Exception as exc:
             logger.exception("Microphone recording failed.")
-            raise RuntimeError(
+            raise SpeechError(
                 f"Could not record from the microphone: {exc}"
             ) from exc
 
@@ -138,7 +138,7 @@ class SpeechListener:
 
         except Exception as exc:
             logger.exception("Speech transcription failed.")
-            raise RuntimeError(
+            raise SpeechError(
                 f"Could not transcribe audio: {exc}"
             ) from exc
 
