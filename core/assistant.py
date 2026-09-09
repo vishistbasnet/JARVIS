@@ -11,7 +11,7 @@ from ai.llm import create_llm_provider
 from ai.tool_calling import GeminiToolCaller
 from core.confirmation import ConfirmationManager
 from core.context import ContextManager
-from core.errors import LLMError, SpeechError
+from core.errors import LLMError, SpeechError, TTSError
 from core.memory_manager import MemoryManager
 from core.memory_extractor import MemoryExtractor
 from core.plan_validator import PlanValidator
@@ -69,12 +69,16 @@ class Assistant:
         """
         Speak a response without allowing TTS failure to
         terminate the assistant.
+
+        TTS is an optional output channel. If speech fails,
+        the response is still printed so the assistant can
+        continue.
         """
 
         try:
             self.speaker.speak(response)
 
-        except Exception as exc:
+        except TTSError as exc:
             logger.exception(
                 "Text-to-speech failed. Continuing without audio."
             )
@@ -84,6 +88,14 @@ class Assistant:
             print(
                 f"[TTS unavailable: {exc}]"
             )
+
+        except Exception as exc:
+            logger.exception(
+                "Unexpected TTS error. Continuing without audio."
+            )
+            print()
+            print("JARVIS:", response)
+            print(f"[TTS unavailable: {exc}]")
 
     def process_once(self, duration: float = 5.0) -> str:
         """Process one complete voice interaction."""
@@ -290,10 +302,21 @@ class Assistant:
             "Waiting for confirmation response..."
         )
 
-        result = self.listener.listen(
-            duration=duration
-        )
+        try:
+            result = self.listener.listen(
+                duration=duration,
+            )
 
+        except SpeechError as exc:
+            logger.exception(
+                "Speech recognition failed while waiting for confirmation."
+            )
+
+            print()
+            print("JARVIS: I couldn't hear your confirmation.")
+            print(f"[Speech unavailable: {exc}]")
+
+            return False
         confirmation_text = result.text.strip()
 
         logger.info(

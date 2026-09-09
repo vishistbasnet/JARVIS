@@ -17,6 +17,7 @@ import edge_tts
 import pygame
 
 from config import settings
+from core.errors import TTSError
 from utils.logger import get_logger
 
 
@@ -112,7 +113,7 @@ class SpeechSpeaker:
         except Exception as exc:
             logger.exception("Text-to-speech failed.")
 
-            raise RuntimeError(
+            raise TTSError(
                 f"Could not generate or play speech: {exc}"
             ) from exc
 

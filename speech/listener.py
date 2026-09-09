@@ -111,18 +111,21 @@ class SpeechListener:
 
         Returns:
             Recognized text.
+
+        Raises:
+            SpeechError: If the Whisper model cannot be loaded
+                or transcription fails.
         """
 
         if audio.size == 0:
             return ""
 
-        self.load_model()
-
-        assert self._model is not None
-
-        logger.info("Transcribing audio...")
-
         try:
+            self.load_model()
+
+            assert self._model is not None
+
+            logger.info("Transcribing audio...")
             segments, _info = self._model.transcribe(
                 audio,
                 language="en",
@@ -137,12 +140,17 @@ class SpeechListener:
             ).strip()
 
         except Exception as exc:
-            logger.exception("Speech transcription failed.")
+            logger.exception(
+                "Speech transcription failed."
+            )
             raise SpeechError(
                 f"Could not transcribe audio: {exc}"
             ) from exc
 
-        logger.info("Transcription complete: %s", text)
+        logger.info(
+            "Transcription complete: %s",
+            text,
+        )
 
         return text
 
