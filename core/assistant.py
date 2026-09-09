@@ -12,6 +12,9 @@ from ai.tool_calling import GeminiToolCaller
 from core.confirmation import ConfirmationManager
 from core.context import ContextManager
 from core.errors import LLMError, SpeechError
+from core.memory_manager import MemoryManager
+from core.memory_extractor import MemoryExtractor
+from core.memory_trigger import should_consider_memory
 from speech.listener import SpeechListener
 from speech.speaker import SpeechSpeaker
 from utils.logger import get_logger
@@ -30,6 +33,10 @@ class Assistant:
         self.tool_caller = GeminiToolCaller()
         self.speaker = SpeechSpeaker()
         self.context = ContextManager(max_messages=10)
+        self.memory = MemoryManager()
+        self.memory_extractor = MemoryExtractor(
+            llm=self.llm,
+        )
         self.confirmation = ConfirmationManager()
 
         logger.info("JARVIS assistant initialized successfully.")
@@ -81,7 +88,34 @@ class Assistant:
 
         self.context.add_user_message(user_text)
 
+        if should_consider_memory(user_text):
+            logger.info("Message may contain a memory. Extracting...")
+        
+            memory = self.memory.remember_from_message(
+                user_message=user_text,
+                extractor=self.memory_extractor,
+            )
+        
+            if memory is not None:
+                logger.info(
+                    "Memory stored: [%s] %s",
+                    memory.category,
+                    memory.content,
+                )
+            else:
+                logger.info("No memory extracted.")
+
         history = self.context.get_messages()
+
+        memory_context = self.memory.build_context(
+            query=user_text,
+            limit=5,
+        )
+
+        if memory_context:
+            logger.info("Relevant memory context found.")
+        else:
+            logger.info("No relevant memories found.")
 
         logger.info(
             "Conversation context contains %d messages.",
@@ -131,8 +165,16 @@ class Assistant:
                 "No tool required. Using normal LLM response."
             )
 
+            message = user_text
+
+            if memory_context:
+                message = (
+                    f"{memory_context}\n\n"
+                    f"User request:\n{user_text}"
+                )
+
             response = self.llm.chat(
-                user_text,
+                message,
                 history=history[:-1],
             )
 
