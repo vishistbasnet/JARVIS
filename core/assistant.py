@@ -14,6 +14,9 @@ from core.context import ContextManager
 from core.errors import LLMError, SpeechError
 from core.memory_manager import MemoryManager
 from core.memory_extractor import MemoryExtractor
+from core.plan_validator import PlanValidator
+from core.planner import TaskPlanner
+from core.task_executor import TaskExecutor
 from core.memory_trigger import should_consider_memory
 from speech.listener import SpeechListener
 from speech.speaker import SpeechSpeaker
@@ -30,14 +33,35 @@ class Assistant:
 
         self.listener = SpeechListener()
         self.llm = create_llm_provider()
+
         self.tool_caller = GeminiToolCaller()
+
         self.speaker = SpeechSpeaker()
         self.context = ContextManager(max_messages=10)
+
         self.memory = MemoryManager()
         self.memory_extractor = MemoryExtractor(
             llm=self.llm,
         )
+
+        # Confirmation must exist before TaskExecutor.
         self.confirmation = ConfirmationManager()
+
+        # Planning and execution.
+        self.planner = TaskPlanner(
+            llm=self.llm,
+            available_actions=self.tool_caller.registry.list_tools(),
+        )
+
+        self.plan_validator = PlanValidator(
+            allowed_actions=set(self.tool_caller.registry.list_tools())
+        )
+
+        self.task_executor = TaskExecutor(
+            tool_router=self.tool_caller.router,
+            confirmation_manager=self.confirmation,
+            confirmation_callback=self._confirm_planned_action,
+        )
 
         logger.info("JARVIS assistant initialized successfully.")
 
@@ -121,6 +145,17 @@ class Assistant:
             "Conversation context contains %d messages.",
             len(history),
         )
+        if self._should_create_plan(user_text):
+            response = self._process_planned_task(user_text)
+
+            self.context.add_assistant_message(response)
+
+            logger.info("Speaking JARVIS response...")
+            self._speak_safely(response)
+
+            logger.info("Planned voice interaction completed.")
+
+            return response
 
         logger.info("Checking whether a tool is required...")
 
@@ -362,3 +397,114 @@ class Assistant:
         self._speak_safely(response)
 
         return response
+
+    def _should_create_plan(self, message: str) -> bool:
+        """Determine whether a request is likely multi-step."""
+
+        text = message.lower().strip()
+
+        planning_phrases = (
+            " and then ",
+            " then ",
+            "after that",
+            "followed by",
+            "first ",
+            "finally ",
+            "step by step",
+            "and open",
+            "and search",
+            "and summarize",
+            "and tell me",
+            "and send",
+        )
+
+        return any(
+            phrase in f" {text} "
+            for phrase in planning_phrases
+        )
+
+    def _process_planned_task(self, user_text: str) -> str:
+        """Create, validate, and execute a multi-step task."""
+
+        logger.info(
+            "Multi-step request detected. Creating task plan..."
+        )
+
+        task = self.planner.create_plan(user_text)
+
+        logger.info(
+            "Task plan created with %d steps.",
+            len(task.steps),
+        )
+
+        self.plan_validator.validate(task)
+
+        logger.info("Task plan validated successfully.")
+
+        try:
+            task = self.task_executor.execute(task)
+
+        except Exception as exc:
+            logger.exception(
+                "Planned task execution failed."
+            )
+
+            return (
+                "I couldn't complete the multi-step task. "
+                f"{exc}"
+            )
+
+        completed_steps = sum(
+            1
+            for step in task.steps
+            if step.status.value == "completed"
+        )
+
+        return (
+            f"Task completed successfully. "
+            f"{completed_steps} step(s) completed."
+        )
+
+    def _confirm_planned_action(self, action: str) -> bool:
+        """Request voice confirmation for a dangerous planned action."""
+
+        logger.info(
+            "Planned task requires confirmation for action: %s",
+            action,
+        )
+
+        prompt = self.confirmation.request_confirmation(action)
+        self._speak_safely(prompt)
+
+        try:
+            response = self.listener.listen()
+        except Exception:
+            logger.exception(
+                "Failed to capture confirmation response."
+            )
+            self.confirmation.cancel()
+            return False
+
+        result = self.confirmation.process_response(response)
+
+        if result == "confirmed":
+            logger.info(
+                "User confirmed planned action: %s",
+                action,
+            )
+            return True
+
+        if result == "cancelled":
+            logger.info(
+                "User cancelled planned action: %s",
+                action,
+            )
+            return False
+
+        logger.info(
+            "Confirmation response was unclear for action: %s",
+            action,
+        )
+
+        self.confirmation.cancel()
+        return False
