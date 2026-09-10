@@ -18,6 +18,7 @@ from core.plan_validator import PlanValidator
 from core.planner import TaskPlanner
 from core.task_executor import TaskExecutor
 from core.memory_trigger import should_consider_memory
+from core.conversation_state import ConversationStateManager
 from speech.listener import SpeechListener
 from speech.speaker import SpeechSpeaker
 from utils.logger import get_logger
@@ -46,6 +47,8 @@ class Assistant:
 
         # Confirmation must exist before TaskExecutor.
         self.confirmation = ConfirmationManager()
+
+        self.conversation_state = ConversationStateManager()
 
         # Planning and execution.
         self.planner = TaskPlanner(
@@ -98,6 +101,10 @@ class Assistant:
             print(f"[TTS unavailable: {exc}]")
 
     def process_once(self, duration: float = 5.0) -> str:
+        if not hasattr(self, "conversation_state"):
+            self.conversation_state = ConversationStateManager()
+
+        self.conversation_state.start()
         """Process one complete voice interaction."""
 
         logger.info("Waiting for user speech...")
